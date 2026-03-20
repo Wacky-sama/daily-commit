@@ -7,23 +7,51 @@
 A shell script updates a file in this repository, commits the change, and pushes it to GitHub.
 A Linux cron job schedules that script to run automatically once per day.
 
+---
+
 ### Setup Instructions
 
-1. Clone the repository:
+1. Create your repository on your Github
+Go to github.com and create a new repository. Clone it to your local machine:
 
 ```bash
-git clone https://github.com/Wacky-sama/daily-commit.git
-cd daily-commit
+git clone git@github.com:<username>/<repo-name>.git
+cd <repo-name>
 ```
 
-2. Create the daily commit script
+---
+
+2. Generate an SSH Key (Dedicated for This Repo)
+
+```bash
+ssh-keygen -C "daily-commit"
+```
+
+- When prompted for a passphrase, you can leave it empty — cron runs unattended and can't type a passphrase for you.
+
+---
+
+3. Add the Public Key to GitHub
+Copy your public key:
+
+```bash
+cat ~/.ssh/id_ed25519.pub
+```
+
+Then go to GitHub Repository > Settings > Deploy Keys > Add Deploy key, paste it in, and save.
+
+---
+
+4. Create the daily commit script
 Inside the repository, create a file named daily.sh:
 
 ```bash
 #!/bin/bash
 
-cd /path/to/your/repo
+# Point to SSH key
+export GIT_SSH_COMMAND="ssh -i /home/<username>/.ssh/id_ed25519 -o StrictHostKeyChecking=no"
 
+cd /path/to/your/repo || exit 1
 echo "Last run: $(date)" > last_run.txt
 
 git add last_run.txt
@@ -31,28 +59,35 @@ git commit -m "Daily update $(date '+%Y-%m-%d %H:%M:%S')"
 git push
 ```
 
+Why `GIT_SSH_COMMAND`? Cron runs with a stripped-down environment — it doesn't load your user session, so it won't find your SSH agent or default keys. Setting this variable explicitly tells Git exactly which key to use.
+
 Make it executable:
 
 ```bash
 chmod +x daily.sh
 ```
 
-3. Allow Git to push without asking for credentials
+---
+
+5. Test the Script Manually
+From inside the repo:
 
 ```bash
-git config --global credential.helper store
+bash /home/<username>/path/to/repo/daily.sh
 ```
 
-Then perform one manual push so Git stores your credentials.
+If it commits and pushes successfully, you're good to go.
 
-4. Add a cron job to automate the script
+---
+
+6. Add a cron job to automate the script
 Open the cron editor:
 
 ```bash
 crontab -e
 ```
 
-Add this daily schedule (adjust the path to your script):
+Add a daily schedule (adjust the path and time to your preference):
 
 ```bash
 0 9 * * * /path/to/daily.sh >> /path/to/daily.log 2>&1
@@ -60,11 +95,25 @@ Add this daily schedule (adjust the path to your script):
 
 This runs the script every day at 9:00 AM and saves output to daily.log.
 
-5. Test the script manually
-From inside the repo:
+---
+
+Verifying It Works
+After the cron job runs, check the log:
 
 ```bash
-./daily.sh
+cat /home/<username>/path/to/daily.log
 ```
 
-If it commits and pushes correctly, the cron job will work as well.
+You should see a successful commit and push output. If something went wrong, the error will be in there too.
+
+---
+
+Notes
+
+- No passwords stored. Everything authenticates via SSH key — no plaintext credentials anywhere.
+
+- The private key (~/.ssh/daily-commit-id_ed25519) should have 600 permissions. SSH will refuse to use it otherwise. Verify with ls -lah ~/.ssh/.
+
+- If you ever rotate the key, remember to update both the GitHub Repository setting and the path inside daily.sh.
+
+---
