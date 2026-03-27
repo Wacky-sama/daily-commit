@@ -40,6 +40,44 @@ cat ~/.ssh/id_ed25519.pub
 
 Then go to GitHub Repository > Settings > Deploy Keys > Add Deploy key, paste it in, and save.
 
+3.1. Configure SSH
+
+Edit your SSH config file:
+
+```bash
+nano ~/.ssh/config
+```
+
+Add:
+
+```bash
+Host github.com
+    HostName github.com
+    User git
+    IdentityFile ~/.ssh/id_ed25519
+    IdentitiesOnly yes
+```
+
+Set correct permissions and ownership:
+
+```bash
+sudo chmod 600 ~/.ssh/config
+
+sudo chown $USER:$USER ~/.ssh/config
+```
+
+Test authentication:
+
+```bash
+ssh -T git@github.com
+```
+
+You should see:
+
+```bash
+Hi <username>/<repo-name>! You've successfully authenticated
+```
+
 ---
 
 4. Create the daily commit script
