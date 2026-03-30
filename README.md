@@ -165,16 +165,14 @@ Paste the following:
 Description=Run daily-commit every day at midnight
 
 [Timer]
-OnCalendar=*-*-* 00:00:00
-TimeZone=Asia/Manila
+OnCalendar=*-*-* 00:00:00 Asia/Manila
 Persistent=true
 
 [Install]
 WantedBy=timers.target
 ```
 
-- `OnCalendar=*-*-* 00:00:00` — fires at midnight every day.
-- `TimeZone=Asia/Manila` — explicitly sets the timezone so it always fires at midnight local time, not UTC.
+- `OnCalendar=*-*-* 00:00:00 Asia/Manila` — fires at midnight every day and explicitly sets the timezone so it always fires at midnight local time, not UTC.
 - `Persistent=true` — if the machine was off at midnight, it will run the job on next boot instead of skipping it.
 
 Adjust `TimeZone` to your own timezone (e.g. `America/New_York`, `Europe/London`). Find yours with:
