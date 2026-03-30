@@ -1,11 +1,11 @@
 # Daily Commit Script (Linux Automation)
 
-> This repository contains a simple automation setup for generating daily GitHub commits using a shell script and a cron job. It’s useful for learning automation, testing workflows, or keeping a repository active every day using a small, consistent update.
+> This repository contains a simple automation setup for generating daily GitHub commits using a shell script and a systemd timer. It's useful for learning automation, testing workflows, or keeping a repository active every day using a small, consistent update.
 
 ## How It Works
 
 A shell script updates a file in this repository, commits the change, and pushes it to GitHub.
-A Linux cron job schedules that script to run automatically once per day.
+A systemd timer schedules that script to run automatically once per day — with better logging, timezone support, and reliability than a traditional cron job.
 
 ---
 
@@ -97,7 +97,9 @@ git commit -m "Daily update $(date '+%Y-%m-%d %H:%M:%S')"
 git push
 ```
 
-Why `GIT_SSH_COMMAND`? Cron runs with a stripped-down environment — it doesn't load your user session, so it won't find your SSH agent or default keys. Setting this variable explicitly tells Git exactly which key to use.
+Why `GIT_SSH_COMMAND`? systemd runs with a stripped-down environment — it doesn't load your user session, SSH agent, or default keys. Setting this variable explicitly tells Git exactly which key to use.
+
+Why `git pull --rebase` before push? Prevents push rejections if the remote has diverged (e.g. from another machine or manual commit).
 
 Make it executable:
 
@@ -118,31 +120,109 @@ If it commits and pushes successfully, you're good to go.
 
 ---
 
-6. Add a cron job to automate the script
-Open the cron editor:
+6. Create the systemd Service Unit
+
+Create the service file at `/etc/systemd/system/daily-commit.service`:
 
 ```bash
-crontab -e
+sudo nano /etc/systemd/system/daily-commit.service
 ```
 
-Add a daily schedule (adjust the path and time to your preference):
+Paste the following:
 
 ```bash
-0 9 * * * /path/to/daily.sh >> /path/to/daily.log 2>&1
+[Unit]
+Description=Daily GitHub commit
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=<username>
+ExecStart=/home/<username>/path/to/repo/daily.sh
+StandardOutput=journal
+StandardError=journal
 ```
 
-This runs the script every day at 9:00 AM and saves output to daily.log.
+- `Type=oneshot` — runs once and exits, perfect for scripts.
+- `After=network-online.target` — waits for network before running, avoiding silent SSH failures.
+- `StandardOutput=journal` — logs go to journald automatically, no log file needed.
+
+---
+
+7. Create the systemd Timer Unit
+
+Create the timer file at `/etc/systemd/system/daily-commit.timer`:
+
+```bash
+sudo nano /etc/systemd/system/daily-commit.timer
+```
+
+Paste the following:
+
+```bash
+[Unit]
+Description=Run daily-commit every day at midnight
+
+[Timer]
+OnCalendar=*-*-* 00:00:00
+TimeZone=Asia/Manila
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+```
+
+- `OnCalendar=*-*-* 00:00:00` — fires at midnight every day.
+- `TimeZone=Asia/Manila` — explicitly sets the timezone so it always fires at midnight local time, not UTC.
+- `Persistent=true` — if the machine was off at midnight, it will run the job on next boot instead of skipping it.
+
+Adjust `TimeZone` to your own timezone (e.g. `America/New_York`, `Europe/London`). Find yours with:
+
+```bash
+timedatectl
+```
+
+---
+
+8. Enable and Start the Timer
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable --now daily-commit.timer
+```
+
+Verify it's scheduled:
+
+```bash
+systemctl list-timers | grep daily-commit
+```
+
+You should see the next scheduled run time listed.
 
 ---
 
 Verifying It Works
-After the cron job runs, check the log:
+
+Run it manually on demand:
 
 ```bash
-cat /home/<username>/path/to/daily.log
+sudo systemctl start daily-commit.service
 ```
 
-You should see a successful commit and push output. If something went wrong, the error will be in there too.
+Check the logs:
+
+```bash
+journalctl -u daily-commit.service -n 30
+```
+
+You should see a successful commit and push output. If something went wrong, the error will be there too.
+
+Follow logs in real time:
+
+```bash
+journalctl -u daily-commit.service -f
+```
 
 ---
 
@@ -150,8 +230,20 @@ Notes
 
 - No passwords stored. Everything authenticates via SSH key — no plaintext credentials anywhere.
 
-- The private key (~/.ssh/daily-commit-id_ed25519) should have 600 permissions. SSH will refuse to use it otherwise. Verify with ls -lah ~/.ssh/.
+- The private key (`~/.ssh/daily-commit-id_ed25519`) should have `600` permissions. SSH will refuse to use it otherwise. Verify with:
 
-- If you ever rotate the key, remember to update both the GitHub Repository setting and the path inside daily.sh.
+```bash
+ls -lah ~/.ssh/
+```
+
+- If you ever rotate the key, update both the GitHub Deploy Key setting and the path inside `daily.sh`.
+
+- Unlike cron, systemd timers are managed with standard `systemctl` commands — enable, disable, start, stop, status — consistent with every other service on your system.
+
+- To disable the automation entirely:
+
+```bash
+sudo systemctl disable --now daily-commit.timer
+```
 
 ---
