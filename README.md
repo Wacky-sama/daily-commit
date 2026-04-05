@@ -94,6 +94,7 @@ echo "Last run: $(date)" > last_run.txt
 
 git add last_run.txt
 git commit -m "Daily update $(date '+%Y-%m-%d %H:%M:%S')"
+git pull --rebase
 git push
 ```
 
